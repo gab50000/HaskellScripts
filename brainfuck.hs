@@ -3,7 +3,7 @@
 {-# LANGUAGE BlockArguments #-}
 
 import           Control.Monad (when)
-import           Data.Char     (chr, ord)
+import           Data.Char     (GeneralCategory (Format), chr, ord)
 
 
 data BrainfuckOps =
@@ -20,14 +20,14 @@ data Tape a = Tape [a] a [a] deriving (Show)
 
 type State = Tape Int
 
--- initCells::State
--- initCells = replicate 30000 0
+initialState:: State
+initialState = Tape (repeat 0) 0 (repeat 0)
 
 type Pos = Int
 
 data Direction = Forward | Backward
 
-advance :: Tape BrainfuckOps -> Direction -> Maybe(Tape BrainfuckOps)
+advance :: Tape a -> Direction -> Maybe(Tape a)
 advance (Tape _ _ []) Forward          = Nothing
 advance (Tape [] _ _) Backward         = Nothing
 advance (Tape l pivot (r:rs)) Forward  = Just(Tape (pivot:l) r rs)
@@ -50,12 +50,26 @@ execCell JumpBack state                     = return state
 
 executeCode::Maybe (Tape BrainfuckOps) -> State -> IO ()
 executeCode Nothing                _           = return ()
-executeCode (Just tape@(Tape _ Increment _)) state = executeCode (advance tape Forward) (increase state 1)
-executeCode (Just tape@(Tape _ Decrement _)) state = executeCode (advance tape Forward) (increase state $ -1)
-executeCode (Just tape@(Tape _ MoveLeft _)) state = undefined
-executeCode (Just tape@(Tape _ MoveRight _)) state = undefined
-executeCode (Just tape@(Tape _ Output _)) state = undefined
-executeCode (Just tape@(Tape _ Input _)) state = undefined
+executeCode (Just tape@(Tape _ Increment _)) state =
+    execCell Increment state >>= executeCode (advance tape Forward)
+executeCode (Just tape@(Tape _ Decrement _)) state =
+    execCell Decrement state >>= executeCode (advance tape Forward)
+executeCode (Just tape@(Tape _ MoveLeft _)) state =
+    case newState of
+        Nothing    -> return ()
+        Just state -> executeCode (advance tape Forward) state
+        where
+            newState = advance state Backward
+executeCode (Just tape@(Tape _ MoveRight _)) state =
+    case newState of
+        Nothing    -> return ()
+        Just state -> executeCode (advance tape Forward) state
+        where
+            newState = advance state Forward
+executeCode (Just tape@(Tape _ Output _)) state =
+    execCell Output state >>= executeCode (advance tape Forward)
+executeCode (Just tape@(Tape _ Input _)) state =
+    execCell Input state >>= executeCode (advance tape Forward)
 executeCode (Just tape@(Tape _ JumpForward _)) state = undefined
 executeCode (Just tape@(Tape _ JumpBack _)) state = undefined
 -- executeCode tape
