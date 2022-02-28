@@ -39,6 +39,7 @@ advances (StreamTape left pivot (Stream r rs)) Forward = StreamTape (Stream pivo
 advances (StreamTape (Stream l ls) pivot right) Backward = StreamTape ls l (Stream pivot right)
 
 type State = StreamTape Int
+type Source = ListTape BrainfuckOps
 
 initialState:: State
 initialState = StreamTape (fillStream 0) 0 (fillStream 0)
@@ -62,31 +63,40 @@ execCell Input state@(StreamTape left cell right) =  do
 execCell JumpForward state                  = return state
 execCell JumpBack state                     = return state
 
-executeCode::Maybe (ListTape BrainfuckOps) -> State -> IO ()
+executeCode::Maybe Source -> State -> IO ()
 executeCode Nothing _ = return ()
+
 executeCode (Just tape@(ListTape _ Increment _)) state =
     execCell Increment state >>= executeCode (advancel tape Forward)
+
 executeCode (Just tape@(ListTape _ Decrement _)) state =
     execCell Decrement state >>= executeCode (advancel tape Forward)
+
 executeCode (Just tape@(ListTape _ MoveLeft _)) state =
         executeCode (advancel tape Forward) newState
         where
             newState = advances state Backward
+
 executeCode (Just tape@(ListTape _ MoveRight _)) state =
         executeCode (advancel tape Forward) state
         where
             newState = advances state Forward
+
 executeCode (Just tape@(ListTape _ Output _)) state =
     execCell Output state >>= executeCode (advancel tape Forward)
+
 executeCode (Just tape@(ListTape _ Input _)) state =
     execCell Input state >>= executeCode (advancel tape Forward)
-executeCode (Just tape@(ListTape _ JumpForward _)) state = undefined
-executeCode (Just tape@(ListTape _ JumpBack _)) state = undefined
--- executeCode tape
-    -- MoveLeft  -> when (pos > 0) $ executeCode tape (pos - 1) state
-    -- MoveRight -> when (pos > 0) $ executeCode tape (pos - 1) state
-    -- Output    -> undefined
-    -- Input     -> undefined
 
--- executeCode tape@(Tape left pivot (r:rs)) = executeCode (Tape pivot:left r rs)  state
+executeCode (Just tape@(ListTape _ JumpForward _)) state@(StreamTape _ cell _) =
+    executeCode tape' (advances state Forward)
+    where tape' = if cell == 0 then jumpToMatchingBracket tape Forward else advancel tape Forward
+
+executeCode (Just tape@(ListTape _ JumpBack _)) state@(StreamTape _ cell _) =
+    executeCode tape' (advances state Forward)
+    where tape' = if cell == 0 then jumpToMatchingBracket tape Forward else advancel tape Forward
+
+
+jumpToMatchingBracket::Source -> Direction -> Maybe Source
+jumpToMatchingBracket = undefined
 
