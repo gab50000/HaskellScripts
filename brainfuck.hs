@@ -24,9 +24,18 @@ data Stream a = Stream a (Stream a) deriving Show
 fillStream::Int -> Stream Int
 fillStream x = Stream x (fillStream x)
 
-data ListTape a = ListTape [a] a [a]
-data StreamTape a = StreamTape (Stream a) a (Stream a)
 
+data ListTape a = ListTape [a] a [a] deriving (Show)
+data StreamTape a = StreamTape (Stream a) a (Stream a) deriving (Show)
+
+pushLeft::StreamTape a -> a -> StreamTape a
+pushLeft (StreamTape left p right) val = StreamTape (Stream val left) p right
+
+pushRight::StreamTape a -> a -> StreamTape a
+pushRight (StreamTape left p right) val = StreamTape left p (Stream val right)
+
+getCurrentCell::StreamTape a -> a
+getCurrentCell (StreamTape _ x _) = x
 
 advancel :: ListTape a -> Direction ->  Maybe (ListTape a)
 advancel (ListTape _ _ []) Forward          = Nothing
@@ -41,8 +50,11 @@ advances (StreamTape (Stream l ls) pivot right) Backward = StreamTape ls l (Stre
 type State = StreamTape Int
 type Source = ListTape BrainfuckOps
 
-initialState:: State
+initialState::State
 initialState = StreamTape (fillStream 0) 0 (fillStream 0)
+
+bogusState::State
+bogusState = pushRight (increase (pushLeft initialState 1) 2) 3
 
 type Pos = Int
 
@@ -66,12 +78,6 @@ execCell JumpBack state                     = return state
 executeCode::Maybe Source -> State -> IO ()
 executeCode Nothing _ = return ()
 
-executeCode (Just tape@(ListTape _ Increment _)) state =
-    execCell Increment state >>= executeCode (advancel tape Forward)
-
-executeCode (Just tape@(ListTape _ Decrement _)) state =
-    execCell Decrement state >>= executeCode (advancel tape Forward)
-
 executeCode (Just tape@(ListTape _ MoveLeft _)) state =
         executeCode (advancel tape Forward) newState
         where
@@ -82,12 +88,6 @@ executeCode (Just tape@(ListTape _ MoveRight _)) state =
         where
             newState = advances state Forward
 
-executeCode (Just tape@(ListTape _ Output _)) state =
-    execCell Output state >>= executeCode (advancel tape Forward)
-
-executeCode (Just tape@(ListTape _ Input _)) state =
-    execCell Input state >>= executeCode (advancel tape Forward)
-
 executeCode (Just tape@(ListTape _ JumpForward _)) state@(StreamTape _ cell _) =
     executeCode tape' (advances state Forward)
     where tape' = if cell == 0 then jumpToMatchingBracket tape Forward else advancel tape Forward
@@ -96,7 +96,26 @@ executeCode (Just tape@(ListTape _ JumpBack _)) state@(StreamTape _ cell _) =
     executeCode tape' (advances state Forward)
     where tape' = if cell == 0 then jumpToMatchingBracket tape Forward else advancel tape Forward
 
+executeCode (Just tape@(ListTape _ cmd _)) state =
+    execCell cmd state >>= executeCode (advancel tape Forward)
+
+type Depth = Int
 
 jumpToMatchingBracket::Source -> Direction -> Maybe Source
-jumpToMatchingBracket = undefined
+jumpToMatchingBracket tape@(ListTape l JumpForward r) Forward = jump (advancel tape Forward) Forward 1
+jumpToMatchingBracket tape@(ListTape l JumpBack r) Backward = jump (advancel tape Backward) Backward 1
+jumpToMatchingBracket tape _ = Nothing
+
+jump::Maybe Source->Direction->Depth -> Maybe Source
+jump Nothing _ _                                          = Nothing
+jump (Just (ListTape _ _ [])) _ _                         = Nothing
+jump (Just tape@(ListTape _ JumpForward _)) Forward depth = jump (advancel tape Forward) Forward (depth+1)
+jump (Just tape@(ListTape _ JumpBack _)) Forward 0 = Just tape
+jump (Just tape@(ListTape _ JumpBack _)) Forward depth = if depth < 0 then Nothing else jump (advancel tape Forward) Forward (depth-1)
+
+jump (Just tape@(ListTape _ JumpBack _)) Backward depth = jump (advancel tape Backward) Backward (depth+1)
+jump (Just tape@(ListTape _ JumpForward _)) Backward 0 = Just tape
+jump (Just tape@(ListTape _ JumpForward _)) Backward depth = if depth < 0 then Nothing else jump (advancel tape Backward) Backward (depth-1)
+jump (Just tape@(ListTape _ other _)) dir depth = jump (advancel tape dir) dir depth
+
 
