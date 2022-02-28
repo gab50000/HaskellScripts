@@ -1,9 +1,12 @@
 #!/usr/bin/env stack
 -- stack --resolver lts-12.21 script
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE GADTs          #-}
 
-import           Control.Monad (when)
-import           Data.Char     (GeneralCategory (Format), chr, ord)
+import           Control.Monad      (when)
+import           Control.Monad.List (ListT)
+import           Data.Char          (GeneralCategory (Format), chr, ord)
+import           Data.List.NonEmpty as NE
 
 
 data BrainfuckOps =
@@ -16,62 +19,69 @@ data BrainfuckOps =
     | JumpForward
     | JumpBack deriving (Show)
 
-data Tape a = Tape [a] a [a] deriving (Show)
+data Stream a = Stream a (Stream a) deriving Show
 
-type State = Tape Int
+fillStream::Int -> Stream Int
+fillStream x = Stream x (fillStream x)
+
+data ListTape a = ListTape [a] a [a]
+data StreamTape a = StreamTape (Stream a) a (Stream a)
+
+
+advancel :: ListTape a -> Direction ->  Maybe (ListTape a)
+advancel (ListTape _ _ []) Forward          = Nothing
+advancel (ListTape [] _ _) Backward         = Nothing
+advancel (ListTape l pivot (r:rs)) Forward  = Just $ ListTape (pivot:l) r rs
+advancel (ListTape (l:ls) pivot r) Backward = Just $ ListTape ls l (pivot:r)
+
+advances :: StreamTape a -> Direction -> StreamTape a
+advances (StreamTape left pivot (Stream r rs)) Forward = StreamTape (Stream pivot left) r rs
+advances (StreamTape (Stream l ls) pivot right) Backward = StreamTape ls l (Stream pivot right)
+
+type State = StreamTape Int
 
 initialState:: State
-initialState = Tape (repeat 0) 0 (repeat 0)
+initialState = StreamTape (fillStream 0) 0 (fillStream 0)
 
 type Pos = Int
 
 data Direction = Forward | Backward
 
-advance :: Tape a -> Direction -> Maybe(Tape a)
-advance (Tape _ _ []) Forward          = Nothing
-advance (Tape [] _ _) Backward         = Nothing
-advance (Tape l pivot (r:rs)) Forward  = Just(Tape (pivot:l) r rs)
-advance (Tape (l:ls) pivot r) Backward = Just(Tape ls l (pivot:r))
-
 increase:: State -> Int -> State
-increase (Tape left cell right) val =  Tape left (cell+val) right
+increase (StreamTape left cell right) val =  StreamTape left (cell+val) right
 
 execCell :: BrainfuckOps -> State -> IO State
 execCell Increment state                    = return (increase state 1)
 execCell Decrement state                    = return (increase state $ -1)
 execCell MoveLeft state                     = return state
 execCell MoveRight state                    = return state
-execCell Output state@(Tape _ cell _)       = (print . chr) cell >> return state
-execCell Input state@(Tape left cell right) =  do
+execCell Output state@(StreamTape _ cell _)       = (print . chr) cell >> return state
+execCell Input state@(StreamTape left cell right) =  do
                                                 char <- getChar
-                                                return $ Tape left (ord char) right
+                                                return $ StreamTape left (ord char) right
 execCell JumpForward state                  = return state
 execCell JumpBack state                     = return state
 
-executeCode::Maybe (Tape BrainfuckOps) -> State -> IO ()
-executeCode Nothing                _           = return ()
-executeCode (Just tape@(Tape _ Increment _)) state =
-    execCell Increment state >>= executeCode (advance tape Forward)
-executeCode (Just tape@(Tape _ Decrement _)) state =
-    execCell Decrement state >>= executeCode (advance tape Forward)
-executeCode (Just tape@(Tape _ MoveLeft _)) state =
-    case newState of
-        Nothing    -> return ()
-        Just state -> executeCode (advance tape Forward) state
+executeCode::Maybe (ListTape BrainfuckOps) -> State -> IO ()
+executeCode Nothing _ = return ()
+executeCode (Just tape@(ListTape _ Increment _)) state =
+    execCell Increment state >>= executeCode (advancel tape Forward)
+executeCode (Just tape@(ListTape _ Decrement _)) state =
+    execCell Decrement state >>= executeCode (advancel tape Forward)
+executeCode (Just tape@(ListTape _ MoveLeft _)) state =
+        executeCode (advancel tape Forward) newState
         where
-            newState = advance state Backward
-executeCode (Just tape@(Tape _ MoveRight _)) state =
-    case newState of
-        Nothing    -> return ()
-        Just state -> executeCode (advance tape Forward) state
+            newState = advances state Backward
+executeCode (Just tape@(ListTape _ MoveRight _)) state =
+        executeCode (advancel tape Forward) state
         where
-            newState = advance state Forward
-executeCode (Just tape@(Tape _ Output _)) state =
-    execCell Output state >>= executeCode (advance tape Forward)
-executeCode (Just tape@(Tape _ Input _)) state =
-    execCell Input state >>= executeCode (advance tape Forward)
-executeCode (Just tape@(Tape _ JumpForward _)) state = undefined
-executeCode (Just tape@(Tape _ JumpBack _)) state = undefined
+            newState = advances state Forward
+executeCode (Just tape@(ListTape _ Output _)) state =
+    execCell Output state >>= executeCode (advancel tape Forward)
+executeCode (Just tape@(ListTape _ Input _)) state =
+    execCell Input state >>= executeCode (advancel tape Forward)
+executeCode (Just tape@(ListTape _ JumpForward _)) state = undefined
+executeCode (Just tape@(ListTape _ JumpBack _)) state = undefined
 -- executeCode tape
     -- MoveLeft  -> when (pos > 0) $ executeCode tape (pos - 1) state
     -- MoveRight -> when (pos > 0) $ executeCode tape (pos - 1) state
