@@ -6,6 +6,7 @@
 import           Control.Monad      (when)
 import           Control.Monad.List (ListT)
 import           Data.Char          (GeneralCategory (Format), chr, ord)
+import           System.IO          (hFlush, stdout)
 
 
 data BrainfuckOps =
@@ -83,10 +84,10 @@ increase (StreamTape left cell right) val =  StreamTape left (cell+val) right
 execCell :: BrainfuckOps -> State -> IO State
 execCell Increment state                    = return (increase state 1)
 execCell Decrement state                    = return (increase state $ -1)
-execCell MoveLeft state                     = return state
-execCell MoveRight state                    = return state
-execCell Output state@(StreamTape _ cell _)       = (print . chr) cell >> return state
-execCell Input state@(StreamTape left cell right) =  do
+execCell MoveLeft state                     = return (advances state Backward)
+execCell MoveRight state                    = return (advances state Forward)
+execCell Output state@(StreamTape _ cell _) = (putChar . chr) cell >> hFlush stdout >> return state
+execCell Input state@(StreamTape left cell right) = do
                                                 char <- getChar
                                                 return $ StreamTape left (ord char) right
 execCell JumpForward state                  = return state
@@ -96,22 +97,12 @@ execCell JumpBack state                     = return state
 executeCode::Maybe Source -> State -> IO ()
 executeCode Nothing _ = return ()
 
-executeCode (Just tape@(ListTape _ MoveLeft _)) state =
-        executeCode (advancel tape Forward) newState
-        where
-            newState = advances state Backward
-
-executeCode (Just tape@(ListTape _ MoveRight _)) state =
-        executeCode (advancel tape Forward) state
-        where
-            newState = advances state Forward
-
 executeCode (Just tape@(ListTape _ JumpForward _)) state@(StreamTape _ cell _) =
-    executeCode tape' (advances state Forward)
+    executeCode tape' state
     where tape' = if cell == 0 then jumpToMatchingBracket tape Forward else advancel tape Forward
 
 executeCode (Just tape@(ListTape _ JumpBack _)) state@(StreamTape _ cell _) =
-    executeCode tape' (advances state Forward)
+    executeCode tape' state
     where tape' = if cell == 0 then jumpToMatchingBracket tape Forward else advancel tape Forward
 
 executeCode (Just tape@(ListTape _ cmd _)) state =
@@ -155,3 +146,12 @@ parseSource (x:xs) = case maybeParsedChar of
             '[' -> Just JumpForward
             ']' -> Just JumpBack
             _   -> Nothing
+
+
+main = do
+    execCell Output $ StreamTape (fillStream 0) 102 (fillStream 0)
+    hFlush stdout
+    let prog = parseSource "++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++."
+    let tape = ListTape [] (head prog) (tail prog)
+    executeCode (Just tape) initialState
+
