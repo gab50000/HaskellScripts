@@ -6,7 +6,6 @@
 import           Control.Monad      (when)
 import           Control.Monad.List (ListT)
 import           Data.Char          (GeneralCategory (Format), chr, ord)
-import           Data.List.NonEmpty as NE
 
 
 data BrainfuckOps =
@@ -138,3 +137,21 @@ jump (Just tape@(ListTape _ JumpBack _)) Backward depth = jump (advancel tape Ba
 jump (Just tape@(ListTape _ JumpForward _)) Backward 1 = Just tape
 jump (Just tape@(ListTape _ JumpForward _)) Backward depth = if depth < 0 then Nothing else jump (advancel tape Backward) Backward (depth-1)
 jump (Just tape@(ListTape _ other _)) dir depth = jump (advancel tape dir) dir depth
+
+
+parseSource:: String -> [BrainfuckOps]
+parseSource [] = []
+parseSource (x:xs) = case maybeParsedChar of
+    Just parsedChar -> parsedChar : parseSource xs
+    Nothing         -> parseSource xs
+    where
+        maybeParsedChar = case x of
+            '>' -> Just MoveRight
+            '<' -> Just MoveLeft
+            '+' -> Just Increment
+            '-' -> Just Decrement
+            '.' -> Just Output
+            ',' -> Just Input
+            '[' -> Just JumpForward
+            ']' -> Just JumpBack
+            _   -> Nothing
