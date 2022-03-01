@@ -1,12 +1,7 @@
 #!/usr/bin/env stack
 -- stack --resolver lts-12.21 script
-{-# LANGUAGE BlockArguments #-}
-{-# LANGUAGE GADTs          #-}
-
-import           Control.Monad      (when)
-import           Control.Monad.List (ListT)
-import           Data.Char          (GeneralCategory (Format), chr, ord)
-import           System.IO          (hFlush, stdout)
+import           Data.Char (GeneralCategory (Format), chr, ord)
+import           System.IO (hFlush, stdout)
 
 
 data BrainfuckOps =
@@ -149,8 +144,6 @@ parseSource (x:xs) = case maybeParsedChar of
 
 
 main = do
-    execCell Output $ StreamTape (fillStream 0) 102 (fillStream 0)
-    hFlush stdout
     let prog = parseSource "++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++."
     let tape = ListTape [] (head prog) (tail prog)
     executeCode (Just tape) initialState
