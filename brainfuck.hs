@@ -130,12 +130,11 @@ jumpToMatchingBracket tape _ = Nothing
 
 jump::Maybe Source->Direction->Depth -> Maybe Source
 jump Nothing _ _                                          = Nothing
-jump (Just (ListTape _ _ [])) _ _                         = Nothing
 jump (Just tape@(ListTape _ JumpForward _)) Forward depth = jump (advancel tape Forward) Forward (depth+1)
-jump (Just tape@(ListTape _ JumpBack _)) Forward 0 = Just tape
+jump (Just tape@(ListTape _ JumpBack _)) Forward 1 = Just tape
 jump (Just tape@(ListTape _ JumpBack _)) Forward depth = if depth < 0 then Nothing else jump (advancel tape Forward) Forward (depth-1)
 
 jump (Just tape@(ListTape _ JumpBack _)) Backward depth = jump (advancel tape Backward) Backward (depth+1)
-jump (Just tape@(ListTape _ JumpForward _)) Backward 0 = Just tape
+jump (Just tape@(ListTape _ JumpForward _)) Backward 1 = Just tape
 jump (Just tape@(ListTape _ JumpForward _)) Backward depth = if depth < 0 then Nothing else jump (advancel tape Backward) Backward (depth-1)
 jump (Just tape@(ListTape _ other _)) dir depth = jump (advancel tape dir) dir depth
