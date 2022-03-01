@@ -103,7 +103,7 @@ executeCode (Just tape@(ListTape _ JumpForward _)) state@(StreamTape _ cell _) =
 
 executeCode (Just tape@(ListTape _ JumpBack _)) state@(StreamTape _ cell _) =
     executeCode tape' state
-    where tape' = if cell == 0 then jumpToMatchingBracket tape Forward else advancel tape Forward
+    where tape' = if cell == 0 then advancel tape Forward else jumpToMatchingBracket tape Backward
 
 executeCode (Just tape@(ListTape _ cmd _)) state =
     execCell cmd state >>= executeCode (advancel tape Forward)
