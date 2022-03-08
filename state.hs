@@ -64,9 +64,9 @@ instance Monad (State s) where
     return x = State (\s -> (x, s))
 
     (>>=) :: State s a -> (a -> State s b) -> State s b
-    f >>= g = State h where
+    State f >>= g = State h where
         h s1 = (a3, s3) where
-               (a2, s2) = runState f s1
+               (a2, s2) = f s1
                (a3, s3) = runState (g a2) s2
 
 
